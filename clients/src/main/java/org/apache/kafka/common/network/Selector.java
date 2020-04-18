@@ -253,7 +253,7 @@ public class Selector implements Selectable, AutoCloseable {
         SelectionKey key = null;
         try {
             configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
-            boolean connected = doConnect(socketChannel, address);
+            boolean connected = doConnect(socketChannel, address);//非阻塞连接，只是发起连接请求
             key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
 
             if (connected) {
@@ -284,7 +284,7 @@ public class Selector implements Selectable, AutoCloseable {
     private void configureSocketChannel(SocketChannel socketChannel, int sendBufferSize, int receiveBufferSize)
             throws IOException {
         socketChannel.configureBlocking(false);
-        Socket socket = socketChannel.socket();
+        Socket socket = socketChannel.socket();//这里是客户端，所以返回Socket
         socket.setKeepAlive(true);
         if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setSendBufferSize(sendBufferSize);
@@ -320,10 +320,19 @@ public class Selector implements Selectable, AutoCloseable {
             throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
     }
 
+    /**
+     * 注册连接事件，创建底层的transportLayer等
+     * @param id
+     * @param socketChannel
+     * @param interestedOps
+     * @return
+     * @throws IOException
+     */
     protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
         SelectionKey key = socketChannel.register(nioSelector, interestedOps);
         KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
-        this.channels.put(id, channel);
+        //selectionkey维护了每个节点编号和Kafka通道的映射关系
+        this.channels.put(id, channel);//节点编号和客户端请求中的目标节点对应
         if (idleExpiryManager != null)
             idleExpiryManager.update(channel.id(), time.nanoseconds());
         return key;
@@ -332,7 +341,7 @@ public class Selector implements Selectable, AutoCloseable {
     private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
         try {
             KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
-            key.attach(channel);
+            key.attach(channel);//将Kafka通道注册到selectionKey上
             return channel;
         } catch (Exception e) {
             try {
@@ -453,7 +462,7 @@ public class Selector implements Selectable, AutoCloseable {
 
         /* check ready keys */
         long startSelect = time.nanoseconds();
-        int numReadyKeys = select(timeout);
+        int numReadyKeys = select(timeout);//立即进行一次轮询，或者阻塞直至超时
         long endSelect = time.nanoseconds();
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
@@ -505,7 +514,7 @@ public class Selector implements Selectable, AutoCloseable {
                            boolean isImmediatelyConnected,
                            long currentTimeNanos) {
         for (SelectionKey key : determineHandlingOrder(selectionKeys)) {
-            KafkaChannel channel = channel(key);
+            KafkaChannel channel = channel(key);//获得绑定到selectionKey的channel
             long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
             boolean sendFailed = false;
 

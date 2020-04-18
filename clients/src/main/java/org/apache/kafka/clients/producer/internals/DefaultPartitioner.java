@@ -52,9 +52,9 @@ public class DefaultPartitioner implements Partitioner {
      * @param cluster The current cluster metadata
      */
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
-        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);//获取主题的所有分区，用来实现消息的负载均衡
         int numPartitions = partitions.size();
-        if (keyBytes == null) {
+        if (keyBytes == null) {//若没有key则均衡分布
             int nextValue = nextValue(topic);
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             if (availablePartitions.size() > 0) {
@@ -64,7 +64,7 @@ public class DefaultPartitioner implements Partitioner {
                 // no partitions are available, give a non-available partition
                 return Utils.toPositive(nextValue) % numPartitions;
             }
-        } else {
+        } else {//消息有key，对消息的key进行散列化后取模
             // hash the keyBytes to choose a partition
             return Utils.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
         }

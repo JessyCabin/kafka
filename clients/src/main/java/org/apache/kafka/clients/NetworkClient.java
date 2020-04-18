@@ -540,12 +540,13 @@ public class NetworkClient implements KafkaClient {
         // process completed actions
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
-        handleCompletedSends(responses, updatedNow);
-        handleCompletedReceives(responses, updatedNow);
-        handleDisconnections(responses, updatedNow);
-        handleConnections();
-        handleInitiateApiVersionRequests(updatedNow);
-        handleTimedOutRequests(responses, updatedNow);
+        handleCompletedSends(responses, updatedNow);//完成发送的处理器
+        handleCompletedReceives(responses, updatedNow);//完成接收的处理器
+        handleDisconnections(responses, updatedNow);//断开连接的处理器
+        handleConnections();//处理连接的处理器
+        handleInitiateApiVersionRequests(updatedNow);//
+        handleTimedOutRequests(responses, updatedNow);//超时请求的处理器
+        //上面几个处理器都会往response中添加数据，有了响应后开始调用请求的回调函数
         completeResponses(responses);
 
         return responses;

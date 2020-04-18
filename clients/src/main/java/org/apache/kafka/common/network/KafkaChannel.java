@@ -206,6 +206,11 @@ public class KafkaChannel implements AutoCloseable {
         return this.state;
     }
 
+    /**
+     * KafkaChannel要操作SocketChannel时，都缴费传输层去做
+     * @return
+     * @throws IOException
+     */
     public boolean finishConnect() throws IOException {
         //we need to grab remoteAddr before finishConnect() is called otherwise
         //it becomes inaccessible if the connection was refused.
@@ -368,6 +373,10 @@ public class KafkaChannel implements AutoCloseable {
         return socket.getInetAddress().toString();
     }
 
+    /**
+     * Selector发送时，只是将请求设置到Kafka通道中，必须确保没有正在运行的其他请求
+     * @param send
+     */
     public void setSend(Send send) {
         if (this.send != null)
             throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress, connection id is " + id);
@@ -375,10 +384,15 @@ public class KafkaChannel implements AutoCloseable {
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 
+    /**
+     * Selector轮询时，检测到读事件时调用Kafka通道的write方法
+     * @return
+     * @throws IOException
+     */
     public NetworkReceive read() throws IOException {
         NetworkReceive result = null;
 
-        if (receive == null) {
+        if (receive == null) {//id实际上会作为NetworkReceive的source
             receive = new NetworkReceive(maxReceiveSize, id, memoryPool);
         }
 
@@ -394,11 +408,16 @@ public class KafkaChannel implements AutoCloseable {
         return result;
     }
 
+    /**
+     * Selector轮询时，检测到写事件时调用Kafka通道的write方法
+     * @return
+     * @throws IOException
+     */
     public Send write() throws IOException {
         Send result = null;
-        if (send != null && send(send)) {
+        if (send != null && send(send)) {//send()返回false表示还没发送成功
             result = send;
-            send = null;
+            send = null;//请求发送完毕，设置send=null，才可以发送下一个请求
         }
         return result;
     }
@@ -427,11 +446,11 @@ public class KafkaChannel implements AutoCloseable {
     private boolean send(Send send) throws IOException {
         midWrite = true;
         send.writeTo(transportLayer);
-        if (send.completed()) {
+        if (send.completed()) {//Send请求全部写出去，取消写事件
             midWrite = false;
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
         }
-        return send.completed();
+        return send.completed();//Send没有写完，监听写事件
     }
 
     /**

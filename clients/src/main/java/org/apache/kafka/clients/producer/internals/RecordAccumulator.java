@@ -172,6 +172,8 @@ public final class RecordAccumulator {
      * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
      * <p>
      *
+     * 追加消息时，首先要获取分区所属的队列，然后取队列中最后一个批记录，如果队列中不存在批记录或上一个批记录已写满，
+     * 应该创建新的批记录，并且加入到队列的尾部。
      * @param tp The topic/partition to which this record is being sent
      * @param timestamp The timestamp of the record
      * @param key The key for the record
@@ -198,6 +200,7 @@ public final class RecordAccumulator {
             synchronized (dq) {
                 if (closed)
                     throw new KafkaException("Producer closed while send in progress");
+                //获取分区的双端队列
                 RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
                 if (appendResult != null)
                     return appendResult;
@@ -255,12 +258,12 @@ public final class RecordAccumulator {
      */
     private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque) {
-        ProducerBatch last = deque.peekLast();
-        if (last != null) {
+        ProducerBatch last = deque.peekLast();//获取队列的最后一个批记录
+        if (last != null) {//无批记录，创建新的批记录
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, time.milliseconds());
             if (future == null)
                 last.closeForRecordAppends();
-            else
+            else//追加消息
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false);
         }
         return null;
